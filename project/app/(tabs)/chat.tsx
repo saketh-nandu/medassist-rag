@@ -348,7 +348,20 @@ export default function ChatScreen() {
 
   function addMedicineReminder(result: ImageAnalysisResult) {
     if (!result.medicineName) return;
-    addReminder({ id: Date.now().toString(), medicineName: result.medicineName, dosage: result.dosageSuggestion || '1 tablet', frequency: 'Daily', timeSlots: ['08:00 AM'], status: 'active', takenToday: false });
+    addReminder({
+      id: Date.now().toString(),
+      medicineName: result.medicineName,
+      dosage: result.dosageSuggestion || '1 tablet',
+      frequency: 'Daily',
+      timeSlots: ['08:00 AM'],
+      status: 'active',
+      takenToday: false,
+      totalDoses: 14,
+      takenDoses: 0,
+      startDate: new Date().toISOString().split('T')[0],
+      durationDays: 7,
+      notificationIds: [],
+    });
     addMessage({ id: Date.now().toString(), role: 'assistant', content: `**Medicine Added!**\n\n**${result.medicineName}** — ${result.dosageSuggestion || '1 tablet'} daily at 08:00 AM\n\nCheck the Monitor tab to manage reminders.\n\n*Always follow your doctor's prescribed dosage.*`, timestamp: new Date(), severity: 'low', conditions: [], suggestedActions: [], affectedAreas: [] });
     setImageModal(false); setImageResult(null); setPickedImage(null);
   }
