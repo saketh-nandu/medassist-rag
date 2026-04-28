@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "expo-notifications": "^55.0.20",
+    "expo-task-manager": "^55.0.15"
+  }
+}
