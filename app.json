@@ -4,6 +4,9 @@
       "eas": {
         "projectId": "9d5b6d19-7dd5-4e7b-a0b8-cd16bc859a37"
       }
+    },
+    "android": {
+      "package": "com.saketh_nandu127.hosfind"
     }
   }
 }
