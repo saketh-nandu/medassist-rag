@@ -37,6 +37,7 @@ export default function SignupScreen() {
       email: email.trim(),
       password,
       options: {
+        emailRedirectTo: 'https://medassistrag.web.app/auth/callback',
         data: {
           full_name: name.trim(),
           age: parseInt(age) || 25,
@@ -54,7 +55,7 @@ export default function SignupScreen() {
       router.replace('/(tabs)');
     } else {
       // Email confirmation required
-      setError('Check your email to confirm your account, then sign in.');
+      setError('✅ Check your email to confirm your account. Click the link to get started!');
     }
   }
 
@@ -75,8 +76,8 @@ export default function SignupScreen() {
           </LinearGradient>
 
           <View style={styles.card}>
-            {error ? <View style={[styles.errorBox, error.includes('Check your email') && styles.successBox]}>
-              <Text style={[styles.errorText, error.includes('Check your email') && styles.successText]}>{error}</Text>
+            {error ? <View style={[styles.errorBox, error.includes('✅') && styles.successBox]}>
+              <Text style={[styles.errorText, error.includes('✅') && styles.successText]}>{error}</Text>
             </View> : null}
 
             {/* Name */}

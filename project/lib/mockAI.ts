@@ -112,7 +112,7 @@ function localFallback(message: string): AIResponse {
     const hour = new Date().getHours();
     const timeGreeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
     return {
-      content: `${timeGreeting}! 👋 I'm HosFind AI, your personal health assistant.\n\nI can help you with:\n• **Symptom analysis** — describe what you're feeling\n• **Disease information** — ask about any condition\n• **Medication guidance** — dosage and precautions\n• **First aid advice** — for injuries and emergencies\n\nHow are you feeling today? Tell me your symptoms and I'll help you understand what might be going on.`,
+      content: `${timeGreeting}! 👋 I'm MedAssist RAG, your personal health assistant.\n\nI can help you with:\n• **Symptom analysis** — describe what you're feeling\n• **Disease information** — ask about any condition\n• **Medication guidance** — dosage and precautions\n• **First aid advice** — for injuries and emergencies\n\nHow are you feeling today? Tell me your symptoms and I'll help you understand what might be going on.`,
       severity: 'low',
       conditions: [],
       suggestedActions: ['Describe your symptoms to get started', 'Ask about a specific disease or condition', 'Ask about medications or treatments'],
@@ -124,7 +124,7 @@ function localFallback(message: string): AIResponse {
   // ── How are you / small talk ──
   if (lower.includes('how are you') || lower.includes('what can you do') || lower.includes('who are you') || lower.includes('what are you')) {
     return {
-      content: `I'm HosFind AI — your AI-powered health assistant! 🏥\n\nI'm doing great and ready to help you.\n\nI can analyze your symptoms, provide information about diseases and conditions, suggest when to seek medical care, and help you understand your health better.\n\nJust describe what you're experiencing and I'll do my best to help. Remember, I'm here to guide you — always consult a doctor for proper diagnosis.`,
+      content: `I'm MedAssist RAG — your AI-powered health assistant! 🏥\n\nI'm doing great and ready to help you.\n\nI can analyze your symptoms, provide information about diseases and conditions, suggest when to seek medical care, and help you understand your health better.\n\nJust describe what you're experiencing and I'll do my best to help. Remember, I'm here to guide you — always consult a doctor for proper diagnosis.`,
       severity: 'low',
       conditions: [],
       suggestedActions: ['Tell me your symptoms', 'Ask about a health condition', 'Ask about medications'],

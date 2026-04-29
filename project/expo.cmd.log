@@ -1,4 +1,0 @@
-env: load .env
-env: export EXPO_PUBLIC_SUPABASE_URL EXPO_PUBLIC_SUPABASE_ANON_KEY EXPO_PUBLIC_RAG_API_URL
-Starting project at C:\Users\Nandu\Downloads\hosfind\project
-Starting Metro Bundler

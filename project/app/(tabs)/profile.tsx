@@ -189,7 +189,7 @@ export default function ProfileScreen() {
             <TouchableOpacity onPress={() => setAboutOpen(true)}>
               <SettingRow
                 icon={<Info size={18} color={colors.textSecondary} />}
-                label="About HosFind"
+                label="About MedAssist RAG"
                 right={<ChevronRight size={16} color={colors.textTertiary} />}
               />
             </TouchableOpacity>
@@ -258,7 +258,7 @@ export default function ProfileScreen() {
             <Text style={styles.logoutText}>Sign Out</Text>
           </TouchableOpacity>
 
-          <Text style={styles.version}>HosFind v1.0.0  AI-Powered Healthcare</Text>
+          <Text style={styles.version}>MedAssist RAG v1.0.0  AI-Powered Healthcare</Text>
           <View style={{ height: spacing.xxl }} />
         </View>
       </ScrollView>
@@ -389,16 +389,16 @@ export default function ProfileScreen() {
         <View style={styles.overlay}>
           <View style={styles.sheet}>
             <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>About HosFind</Text>
+              <Text style={styles.sheetTitle}>About MedAssist RAG</Text>
               <TouchableOpacity onPress={() => setAboutOpen(false)}><X size={22} color={colors.textSecondary} /></TouchableOpacity>
             </View>
             <View style={styles.aboutContent}>
               <View style={styles.aboutLogo}>
                 <Heart size={32} color={colors.primary} fill={colors.primary} />
               </View>
-              <Text style={styles.aboutName}>HosFind</Text>
+              <Text style={styles.aboutName}>MedAssist RAG</Text>
               <Text style={styles.aboutVersion}>Version 1.0.0</Text>
-              <Text style={styles.aboutDesc}>HosFind is an AI-powered healthcare companion that helps you understand your symptoms, find nearby hospitals, manage medications, and monitor your health — all in one place.</Text>
+              <Text style={styles.aboutDesc}>MedAssist RAG is an AI-powered healthcare companion that helps you understand your symptoms, find nearby hospitals, manage medications, and monitor your health — all in one place.</Text>
               {[
                 { label: 'AI Engine',    value: 'RAG + Medical Knowledge Base' },
                 { label: 'Map Data',     value: 'OpenStreetMap (free)' },

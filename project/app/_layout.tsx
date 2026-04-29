@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, View, Platform } from 'react-native';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { AppProvider, useApp } from '@/context/AppContext';
 import { ThemeProvider, useTheme } from '@/context/ThemeContext';
@@ -22,9 +22,9 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (session === undefined) return;
-    const inAuth = segments[0] === 'login' || segments[0] === 'signup';
+    const inAuth = segments[0] === 'login' || segments[0] === 'signup' || segments[0] === 'auth';
     if (!session && !inAuth) router.replace('/login');
-    else if (session && inAuth) router.replace('/(tabs)');
+    else if (session && inAuth && segments[1] !== 'callback') router.replace('/(tabs)');
   }, [session, segments]);
 
   if (session === undefined) {
@@ -42,17 +42,17 @@ function NotificationHandler() {
   const { toggleReminderTaken, reminders } = useApp();
 
   useEffect(() => {
-    // Foreground: notification received while app is open
+    // Notifications not supported on web
+    if (Platform.OS === 'web') return;
+
     const foregroundSub = Notifications.addNotificationReceivedListener(notification => {
       console.log('[Notification] Received in foreground:', notification.request.content.title);
     });
 
-    // Background/killed: user tapped a notification or action button
     const responseSub = Notifications.addNotificationResponseReceivedListener(response => {
       const action     = response.actionIdentifier;
       const data       = response.notification.request.content.data as any;
       const reminderId = data?.reminderId;
-
       if (!reminderId) return;
 
       if (action === 'TAKEN' || action === Notifications.DEFAULT_ACTION_IDENTIFIER) {

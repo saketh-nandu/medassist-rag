@@ -23,7 +23,17 @@ export default function LoginScreen() {
     setLoading(true); setError('');
     const { error: err } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
     setLoading(false);
-    if (err) { setError(err.message); return; }
+    if (err) { 
+      // Provide more helpful error messages
+      if (err.message.includes('Email not confirmed')) {
+        setError('Please check your email and click the confirmation link first.');
+      } else if (err.message.includes('Invalid login credentials')) {
+        setError('Invalid email or password. Please try again.');
+      } else {
+        setError(err.message);
+      }
+      return; 
+    }
     router.replace('/(tabs)');
   }
 

@@ -10,14 +10,16 @@ import type { Reminder } from '@/context/AppContext';
 
 // ─── SETUP ────────────────────────────────────────────────────────────────────
 
-// How notifications appear when app is in foreground
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge:  true,
-  }),
-});
+// Only set notification handler on native — web doesn't support it
+if (Platform.OS !== 'web') {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge:  true,
+    }),
+  });
+}
 
 // ─── PERMISSIONS ──────────────────────────────────────────────────────────────
 

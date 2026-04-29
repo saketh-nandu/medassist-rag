@@ -1,23 +1,23 @@
 {
   "expo": {
-    "name": "HosFind",
-    "slug": "hosfind-medical-ai",
+    "name": "MedAssist RAG",
+    "slug": "medassist-rag",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/logo.png",
-    "scheme": "hosfind",
+    "scheme": "medassistrag",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.hosfind.app"
+      "bundleIdentifier": "com.medassistrag.app"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/logo.png",
         "backgroundColor": "#0D9488"
       },
-      "package": "com.hosfind.app",
+      "package": "com.medassistrag.app",
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO",

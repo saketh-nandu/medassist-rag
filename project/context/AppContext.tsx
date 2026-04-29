@@ -235,7 +235,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   function bootstrap(user: any) {
     setUserId(user.id);
     loadProfileFromMeta(user.user_metadata);
-    loadMessages(user.id);
+    loadMessages(user.id); // This will now actually load messages
     loadReminders(user.id);
     loadReports(user.id);
     // Setup notifications: request permission first, then register categories
@@ -258,84 +258,122 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // ── Messages ──────────────────────────────────────────────────────────────
 
-  // On boot: start fresh (empty chat). History lives in reports.
+  // On boot: load recent messages from current session or create new session
   async function loadMessages(uid: string) {
-    // Don't load old messages on boot — always start fresh
-    // Past sessions are accessible via reports → loadSession()
-    setMessages([]);
-    setMessagesLoading(false);
+    setMessagesLoading(true);
+    try {
+      // Load most recent messages from any session
+      const { data: recentData, error: recentError } = await supabase
+        .from('chat_messages')
+        .select('*')
+        .eq('user_id', uid)
+        .order('created_at', { ascending: false })
+        .limit(50); // Load last 50 messages
+
+      if (!recentError && recentData && recentData.length > 0) {
+        // Reverse to show in chronological order
+        const recentMessages = recentData.reverse().map(rowToMessage);
+        setMessages(recentMessages);
+        // Update current session to match the most recent session
+        const latestSessionId = recentData[0]?.session_id;
+        if (latestSessionId) {
+          setCurrentSessionId(latestSessionId);
+        }
+      } else {
+        // No messages found, start fresh
+        setMessages([]);
+      }
+    } catch (err) {
+      console.warn('Could not load messages:', err);
+      setMessages([]);
+    } finally {
+      setMessagesLoading(false);
+    }
   }
 
   // Load a specific past session's messages into the chat view
   const loadSession = useCallback(async (sessionId: string) => {
     setMessagesLoading(true);
     try {
-      let query = supabase
-        .from('chat_messages')
-        .select('*')
-        .order('created_at', { ascending: true });
+      // Always get user directly — avoids stale closure issue
+      const { data: { user } } = await supabase.auth.getUser();
+      const uid = user?.id;
+      if (!uid) return;
 
-      // If it's a legacy session, fall back to loading by user_id
+      let rows: any[] = [];
+
       if (sessionId.startsWith('legacy_session_')) {
-        const uid = sessionId.replace('legacy_session_', '');
-        query = query.eq('user_id', uid).limit(200);
+        // Legacy: load all messages for this user
+        const { data } = await supabase
+          .from('chat_messages')
+          .select('*')
+          .eq('user_id', uid)
+          .order('created_at', { ascending: true })
+          .limit(200);
+        rows = data || [];
       } else {
-        query = query.eq('session_id', sessionId);
+        // Try by session_id first
+        const { data, error } = await supabase
+          .from('chat_messages')
+          .select('*')
+          .eq('session_id', sessionId)
+          .order('created_at', { ascending: true });
+
+        if (!error && data && data.length > 0) {
+          rows = data;
+        } else {
+          // Fallback: load all messages for this user
+          const { data: fallback } = await supabase
+            .from('chat_messages')
+            .select('*')
+            .eq('user_id', uid)
+            .order('created_at', { ascending: true })
+            .limit(200);
+          rows = fallback || [];
+        }
       }
 
-      const { data, error } = await query;
-      if (error) throw error;
-
-      const loaded = (data || []).map(rowToMessage);
-      if (loaded.length === 0) {
-        // session_id column may not exist yet — show a helpful message
-        console.warn('[loadSession] No messages found for session:', sessionId);
-      }
-      setMessages(loaded);
+      setMessages(rows.map(rowToMessage));
       setCurrentSessionId(sessionId);
     } catch (err: any) {
       console.warn('Could not load session:', err?.message || err);
-      // If column doesn't exist, try loading all messages for this user
-      if (userId) {
-        try {
-          const { data } = await supabase
-            .from('chat_messages')
-            .select('*')
-            .eq('user_id', userId)
-            .order('created_at', { ascending: true })
-            .limit(200);
-          setMessages((data || []).map(rowToMessage));
-        } catch (_) {}
-      }
     } finally {
       setMessagesLoading(false);
     }
-  }, [userId]);
+  }, []);
 
   const addMessage = useCallback(async (msg: ChatMessage) => {
     const msgWithSession = { ...msg, sessionId: currentSessionId };
     // Optimistic update
     setMessages(prev => [...prev, msgWithSession]);
 
-    if (!userId) return;
-
-    // Save to DB with session_id
-    const { error } = await supabase
-      .from('chat_messages')
-      .insert(messageToRow(msgWithSession, userId, currentSessionId));
-
-    if (error) {
-      console.warn('Failed to save message:', error.message);
+    // Get user directly — avoids stale userId closure
+    const { data: { user } } = await supabase.auth.getUser();
+    const uid = user?.id;
+    if (!uid) {
+      console.warn('[addMessage] No user — message not saved to DB');
+      return;
     }
 
-    // Auto-generate report for assistant messages with conditions
+    // Save to DB
+    const { error } = await supabase
+      .from('chat_messages')
+      .insert(messageToRow(msgWithSession, uid, currentSessionId));
+
+    if (error) {
+      console.warn('[addMessage] Failed to save:', error.message, error.details);
+    } else {
+      console.log('[addMessage] Saved:', msg.role, msg.id);
+    }
+
+    // Auto-generate report for assistant messages with conditions (medium/high)
     if (
       msg.role === 'assistant' &&
       msg.conditions && msg.conditions.length > 0 &&
       msg.severity && msg.severity !== 'low'
     ) {
       const report = {
-        user_id:           userId,
+        user_id:           uid,
         title:             msg.conditions[0] + ' Analysis',
         conditions:        msg.conditions,
         severity:          msg.severity,
@@ -344,17 +382,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         chat_message_id:   msg.id,
         session_id:        currentSessionId,
       };
-      const { data: rData } = await supabase
+      const { data: rData, error: rErr } = await supabase
         .from('health_reports')
         .insert(report)
         .select()
         .single();
 
-      if (rData) {
-        setReports(prev => [rowToReport(rData), ...prev]);
-      }
+      if (rErr) console.warn('[addMessage] Report save failed:', rErr.message);
+      if (rData) setReports(prev => [rowToReport(rData), ...prev]);
     }
-  }, [userId, currentSessionId]);
+  }, [currentSessionId]);
 
   // Clear current session and start a brand new one
   const clearMessages = useCallback(async () => {
@@ -403,20 +440,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }
 
   const addReminder = useCallback(async (r: Reminder) => {
-    // Schedule notifications first
     const notifIds = await scheduleReminderNotifications(r);
     const withNotifs = { ...r, notificationIds: notifIds };
-
     setReminders(prev => [...prev, withNotifs]);
-    if (!userId) return;
 
-    const { error } = await supabase.from('reminders').insert(reminderToRow(withNotifs, userId));
+    const { data: { user } } = await supabase.auth.getUser();
+    const uid = user?.id;
+    if (!uid) return;
+
+    const { error } = await supabase.from('reminders').insert(reminderToRow(withNotifs, uid));
     if (error) {
-      console.warn('Failed to save reminder:', error.message);
+      console.warn('[addReminder] Failed:', error.message);
       setReminders(prev => prev.filter(x => x.id !== r.id));
       await cancelReminderNotifications(notifIds);
     }
-  }, [userId]);
+  }, []);
 
   const toggleReminderTaken = useCallback(async (id: string) => {
     let newTaken = false;
@@ -431,7 +469,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return r;
     }));
 
-    if (!userId) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    const uid = user?.id;
+    if (!uid) return;
+
     const { error } = await supabase
       .from('reminders')
       .update({
@@ -439,25 +480,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         taken_date:  newTaken ? new Date().toISOString().split('T')[0] : null,
         taken_doses: newTakenDoses,
       })
-      .eq('id', id).eq('user_id', userId);
+      .eq('id', id).eq('user_id', uid);
 
     if (error) {
-      console.warn('Failed to update reminder:', error.message);
-      setReminders(prev => prev.map(r => r.id === id ? { ...r, takenToday: !newTaken, takenDoses: newTaken ? newTakenDoses - 1 : newTakenDoses + 1 } : r));
+      console.warn('[toggleReminderTaken] Failed:', error.message);
+      setReminders(prev => prev.map(r => r.id === id
+        ? { ...r, takenToday: !newTaken, takenDoses: newTaken ? newTakenDoses - 1 : newTakenDoses + 1 }
+        : r));
     }
-  }, [userId]);
+  }, []);
 
   const removeReminder = useCallback(async (id: string) => {
     const reminder = reminders.find(r => r.id === id);
     setReminders(prev => prev.filter(r => r.id !== id));
-    // Cancel its notifications
     if (reminder?.notificationIds?.length) {
       await cancelReminderNotifications(reminder.notificationIds);
     }
-    if (!userId) return;
-    const { error } = await supabase.from('reminders').delete().eq('id', id).eq('user_id', userId);
-    if (error) { console.warn('Failed to delete reminder:', error.message); loadReminders(userId); }
-  }, [userId, reminders]);
+    const { data: { user } } = await supabase.auth.getUser();
+    const uid = user?.id;
+    if (!uid) return;
+    const { error } = await supabase.from('reminders').delete().eq('id', id).eq('user_id', uid);
+    if (error) { console.warn('[removeReminder] Failed:', error.message); }
+  }, [reminders]);
 
   // ── Profile ───────────────────────────────────────────────────────────────
 
