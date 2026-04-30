@@ -1,9 +1,106 @@
 -- ============================================================
 -- MedAssist RAG — Complete Supabase Database Setup
+-- This includes BOTH user data tables AND vector database for RAG
 -- Run this ONCE in Supabase SQL Editor
 -- ============================================================
 
--- ─── 1. CHAT MESSAGES ────────────────────────────────────────
+-- ─── ENABLE EXTENSIONS ───────────────────────────────────────
+-- Enable pgvector for vector similarity search
+CREATE EXTENSION IF NOT EXISTS vector;
+
+-- Enable full-text search
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+-- ─── 1. MEDICAL KNOWLEDGE BASE (RAG VECTOR DATABASE) ─────────
+
+-- Medical chunks table for vector embeddings
+CREATE TABLE IF NOT EXISTS medical_chunks (
+  id            BIGSERIAL PRIMARY KEY,
+  doc_id        TEXT NOT NULL,
+  source        TEXT NOT NULL,
+  category      TEXT NOT NULL,
+  title         TEXT NOT NULL,
+  chunk_index   INTEGER NOT NULL DEFAULT 0,
+  content       TEXT NOT NULL,
+  metadata      JSONB DEFAULT '{}',
+  embedding     vector(384),  -- 384-dimensional embeddings from all-MiniLM-L6-v2
+  created_at    TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Indexes for efficient vector search
+CREATE INDEX IF NOT EXISTS medical_chunks_embedding_idx 
+  ON medical_chunks USING ivfflat (embedding vector_cosine_ops) 
+  WITH (lists = 100);
+
+CREATE INDEX IF NOT EXISTS medical_chunks_source_idx ON medical_chunks(source);
+CREATE INDEX IF NOT EXISTS medical_chunks_category_idx ON medical_chunks(category);
+CREATE INDEX IF NOT EXISTS medical_chunks_doc_id_idx ON medical_chunks(doc_id);
+
+-- Full-text search index
+CREATE INDEX IF NOT EXISTS medical_chunks_content_fts_idx 
+  ON medical_chunks USING gin(to_tsvector('english', content));
+
+-- Vector similarity search function
+CREATE OR REPLACE FUNCTION match_chunks(
+  query_embedding vector(384),
+  match_count int DEFAULT 10,
+  similarity_threshold float DEFAULT 0.1
+)
+RETURNS TABLE (
+  id bigint,
+  doc_id text,
+  source text,
+  category text,
+  title text,
+  chunk_index integer,
+  content text,
+  metadata jsonb,
+  embedding vector(384),
+  similarity float
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    medical_chunks.id,
+    medical_chunks.doc_id,
+    medical_chunks.source,
+    medical_chunks.category,
+    medical_chunks.title,
+    medical_chunks.chunk_index,
+    medical_chunks.content,
+    medical_chunks.metadata,
+    medical_chunks.embedding,
+    1 - (medical_chunks.embedding <=> query_embedding) AS similarity
+  FROM medical_chunks
+  WHERE 1 - (medical_chunks.embedding <=> query_embedding) > similarity_threshold
+  ORDER BY medical_chunks.embedding <=> query_embedding
+  LIMIT match_count;
+END;
+$$;
+
+-- ─── 2. LEGACY MEDICAL KNOWLEDGE TABLE ──────────────────────
+-- Fallback table for non-vector search
+
+CREATE TABLE IF NOT EXISTS medical_knowledge (
+  id            BIGSERIAL PRIMARY KEY,
+  source        TEXT NOT NULL,
+  category      TEXT NOT NULL,
+  title         TEXT NOT NULL,
+  content       TEXT NOT NULL,
+  symptoms      TEXT[] DEFAULT '{}',
+  precautions   TEXT[] DEFAULT '{}',
+  metadata      JSONB DEFAULT '{}',
+  created_at    TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS medical_knowledge_source_idx ON medical_knowledge(source);
+CREATE INDEX IF NOT EXISTS medical_knowledge_category_idx ON medical_knowledge(category);
+CREATE INDEX IF NOT EXISTS medical_knowledge_content_fts_idx 
+  ON medical_knowledge USING gin(to_tsvector('english', content));
+
+-- ─── 3. CHAT MESSAGES ────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS chat_messages (
   id            TEXT PRIMARY KEY,
@@ -32,7 +129,7 @@ DROP POLICY IF EXISTS "Users can manage own messages" ON chat_messages;
 CREATE POLICY "Users can manage own messages" ON chat_messages
   FOR ALL USING (auth.uid() = user_id);
 
--- ─── 2. HEALTH REPORTS ───────────────────────────────────────
+-- ─── 4. HEALTH REPORTS ───────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS health_reports (
   id              BIGSERIAL PRIMARY KEY,
@@ -59,7 +156,7 @@ DROP POLICY IF EXISTS "Users can manage own reports" ON health_reports;
 CREATE POLICY "Users can manage own reports" ON health_reports
   FOR ALL USING (auth.uid() = user_id);
 
--- ─── 3. REMINDERS ────────────────────────────────────────────
+-- ─── 5. REMINDERS ────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS reminders (
   id               TEXT PRIMARY KEY,
@@ -94,7 +191,7 @@ DROP POLICY IF EXISTS "Users can manage own reminders" ON reminders;
 CREATE POLICY "Users can manage own reminders" ON reminders
   FOR ALL USING (auth.uid() = user_id);
 
--- ─── 4. RESET TAKEN TODAY (RPC) ──────────────────────────────
+-- ─── 6. RESET TAKEN TODAY (RPC) ──────────────────────────────
 -- Resets taken_today for all reminders where taken_date < today
 
 CREATE OR REPLACE FUNCTION reset_taken_today()
@@ -110,7 +207,7 @@ BEGIN
 END;
 $$;
 
--- ─── 5. BACKFILL EXISTING DATA ───────────────────────────────
+-- ─── 7. BACKFILL EXISTING DATA ───────────────────────────────
 -- Give existing messages/reports a legacy session so they're accessible
 
 UPDATE chat_messages
@@ -122,8 +219,28 @@ SET session_id = 'legacy_session_' || user_id::text
 WHERE session_id IS NULL;
 
 -- ─── DONE ─────────────────────────────────────────────────────
--- Tables created:
---   chat_messages  — stores all chat history with session_id
---   health_reports — auto-generated from medium/high severity chats
---   reminders      — medicine reminders with adherence tracking
--- RLS enabled on all tables (users can only see their own data)
+-- COMPLETE DATABASE SETUP INCLUDES:
+-- 
+-- 1. VECTOR DATABASE (RAG System):
+--    - medical_chunks: Vector embeddings for similarity search (384 dimensions)
+--    - medical_knowledge: Fallback full-text search
+--    - match_chunks(): Vector similarity function with cosine distance
+-- 
+-- 2. USER DATA TABLES:
+--    - chat_messages: Conversation history with session management
+--    - health_reports: Auto-generated medical reports from conversations
+--    - reminders: Medicine tracking with adherence monitoring
+-- 
+-- 3. SECURITY & PERFORMANCE:
+--    - Row Level Security (RLS) on all user tables
+--    - Vector indexes for fast similarity search (ivfflat)
+--    - Full-text search indexes for keyword matching
+--    - Optimized for real-time RAG queries
+-- 
+-- 4. EXTENSIONS ENABLED:
+--    - pgvector: Vector similarity search with cosine distance
+--    - pg_trgm: Trigram matching for fuzzy text search
+-- 
+-- TOTAL TABLES: 6 (4 user data + 2 knowledge base)
+-- VECTOR DIMENSIONS: 384 (all-MiniLM-L6-v2 embeddings)
+-- SEARCH METHODS: Vector similarity + Full-text + Hybrid RAG
