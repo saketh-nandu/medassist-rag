@@ -3,11 +3,12 @@ import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   SafeAreaView, Modal, TextInput, Switch, Alert, ActivityIndicator,
 } from 'react-native';
-import { Plus, X, Bell, BellOff, CalendarDays } from 'lucide-react-native';
+import { Plus, X, Bell, BellOff, CalendarDays, Brain } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useApp, Reminder } from '@/context/AppContext';
 import AnatomyViewer from '@/components/AnatomyViewer';
 import ReminderCard from '@/components/ReminderCard';
+import ModelEvaluation from '@/components/ModelEvaluation';
 import { colors } from '@/constants/colors';
 import { radius, shadows, spacing, typography } from '@/constants/theme';
 
@@ -16,7 +17,7 @@ const today = new Date().getDay();
 
 export default function MonitorScreen() {
   const { reminders, addReminder, toggleReminderTaken, removeReminder, highlightedAreas, profile, remindersLoading } = useApp();
-  const [tab, setTab] = useState<'anatomy' | 'reminders'>('reminders');
+  const [tab, setTab] = useState<'anatomy' | 'reminders' | 'model'>('reminders');
   const [showAdd, setShowAdd] = useState(false);
   const [notifEnabled, setNotifEnabled] = useState(true);
 
@@ -90,14 +91,14 @@ export default function MonitorScreen() {
 
       {/* Tabs */}
       <View style={styles.tabRow}>
-        {(['reminders', 'anatomy'] as const).map((t) => (
+        {(['reminders', 'anatomy', 'model'] as const).map((t) => (
           <TouchableOpacity
             key={t}
             style={[styles.tabBtn, tab === t && styles.tabBtnActive]}
             onPress={() => setTab(t)}
           >
             <Text style={[styles.tabText, tab === t && styles.tabTextActive]}>
-              {t === 'reminders' ? 'Reminders' : 'Body Map'}
+              {t === 'reminders' ? 'Reminders' : t === 'anatomy' ? 'Body Map' : 'AI Model'}
             </Text>
           </TouchableOpacity>
         ))}
@@ -177,7 +178,7 @@ export default function MonitorScreen() {
               ))
             )}
           </View>
-        ) : (
+        ) : tab === 'anatomy' ? (
           <View style={styles.section}>
             <View style={styles.anatomyCard}>
               <Text style={styles.anatomyTitle}>Body Map</Text>
@@ -189,6 +190,8 @@ export default function MonitorScreen() {
               <AnatomyViewer highlightedAreas={highlightedAreas} gender={profile.gender} adherence={overallAdherence} />
             </View>
           </View>
+        ) : (
+          <ModelEvaluation />
         )}
         <View style={{ height: spacing.xxl }} />
       </ScrollView>
