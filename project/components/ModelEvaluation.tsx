@@ -69,6 +69,11 @@ export default function ModelEvaluation() {
     try {
       setLoading(true);
       const response = await fetch(`${process.env.EXPO_PUBLIC_RAG_API_URL}/api/model/metrics`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: Model evaluation endpoints not yet deployed`);
+      }
+      
       const data = await response.json();
       
       if (data.status === 'success') {
@@ -76,7 +81,17 @@ export default function ModelEvaluation() {
       }
     } catch (error) {
       console.error('Failed to load model metrics:', error);
-      Alert.alert('Error', 'Failed to load model metrics');
+      
+      // Show user-friendly message for deployment in progress
+      if (error.message.includes('404') || error.message.includes('not yet deployed')) {
+        Alert.alert(
+          'Model Evaluation Deploying', 
+          'The model evaluation system is currently being deployed to the server. Please try again in 5-10 minutes.',
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert('Error', 'Failed to load model metrics. Please check your connection and try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -93,17 +108,34 @@ export default function ModelEvaluation() {
           { 
             text: 'Start Evaluation', 
             onPress: async () => {
-              const response = await fetch(`${process.env.EXPO_PUBLIC_RAG_API_URL}/api/model/evaluate`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
-              });
-              const data = await response.json();
-              
-              if (data.status === 'success') {
-                setEvaluation(data.evaluation);
-                Alert.alert('Success', 'Model evaluation completed!');
-              } else {
-                Alert.alert('Error', data.message || 'Evaluation failed');
+              try {
+                const response = await fetch(`${process.env.EXPO_PUBLIC_RAG_API_URL}/api/model/evaluate`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' }
+                });
+                
+                if (!response.ok) {
+                  throw new Error(`HTTP ${response.status}: Model evaluation endpoints not yet deployed`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                  setEvaluation(data.evaluation);
+                  Alert.alert('Success', 'Model evaluation completed!');
+                } else {
+                  Alert.alert('Error', data.message || 'Evaluation failed');
+                }
+              } catch (evalError) {
+                console.error('Evaluation error:', evalError);
+                if (evalError.message.includes('404') || evalError.message.includes('not yet deployed')) {
+                  Alert.alert(
+                    'Model Evaluation Deploying', 
+                    'The model evaluation system is currently being deployed. Please try again in 5-10 minutes.'
+                  );
+                } else {
+                  Alert.alert('Error', 'Failed to run model evaluation. Please try again.');
+                }
               }
             }
           }
