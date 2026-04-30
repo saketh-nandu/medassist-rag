@@ -177,7 +177,7 @@ function MessageBubble({ message, onViewBody }: { message: ChatMessage & { confi
           <Text style={[mb.aiText, isEmergency && { color: '#7F1D1D' }]}>{renderText(message.content)}</Text>
           {confidence !== undefined && <ConfidenceMeter score={confidence} />}
           
-          {/* RAG Sources Display */}
+          {/* RAG Sources Display with Dataset Paths */}
           {ragData && ragData.topSources && ragData.topSources.length > 0 && (
             <View style={mb.ragSources}>
               <Text style={mb.ragSourcesTitle}>📚 Medical Sources ({ragData.pipelineStats.finalResults} selected)</Text>
@@ -185,7 +185,11 @@ function MessageBubble({ message, onViewBody }: { message: ChatMessage & { confi
                 <View key={i} style={mb.sourceItem}>
                   <Text style={mb.sourceTitle}>{source.title?.slice(0, 40)}...</Text>
                   <Text style={mb.sourceDetails}>
-                    {source.source} • {source.vectorScore ? `${source.vectorScore}% match` : 'Keyword match'}
+                    📁 {source.datasetPath}
+                  </Text>
+                  <Text style={mb.sourceScores}>
+                    📈 {source.vectorScore ? `${source.vectorScore}% match` : 'Keyword match'} | 
+                    {source.chunkIndex !== undefined ? ` Chunk ${source.chunkIndex + 1}` : ''}
                   </Text>
                 </View>
               ))}
@@ -250,6 +254,7 @@ const mb = StyleSheet.create({
   sourceItem:      { marginBottom: spacing.sm, paddingLeft: spacing.sm },
   sourceTitle:     { fontSize: 12, fontWeight: '600', color: colors.text },
   sourceDetails:   { fontSize: 10, color: colors.textSecondary, marginTop: 2 },
+  sourceScores:    { fontSize: 10, color: colors.textTertiary, marginTop: 1, fontStyle: 'italic' },
   ragStats:        { fontSize: 10, color: colors.textTertiary, marginTop: spacing.sm, fontStyle: 'italic' },
   
   tagsRow:   { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.sm },
@@ -311,13 +316,28 @@ export default function ChatScreen() {
       }));
       const response = await getAIResponse(trimmed, history);
       
-      // Log RAG details to browser console
+      // Log RAG details to browser console with dataset sources
       if (response.ragMetadata) {
         console.group('🧠 RAG Pipeline Results');
         console.log('📊 Pipeline Stats:', response.ragMetadata.pipelineStats);
         console.log('🔍 Query Expansion:', response.ragMetadata.queryExpansion || 'None');
         console.log('🤖 Generation Stats:', response.ragMetadata.generationStats);
-        console.table(response.ragMetadata.topSources);
+        
+        // Enhanced source logging with dataset paths
+        console.group('📚 Retrieved Sources with Dataset Paths');
+        response.ragMetadata.topSources.forEach((source, i) => {
+          console.log(`${i + 1}. ${source.title}`);
+          console.log(`   📁 Dataset: ${source.datasetPath}`);
+          console.log(`   📈 Scores: Vector ${source.vectorScore}% | RRF ${source.rrfScore} | Rerank ${source.rerankScore}%`);
+          console.log(`   📑 Chunk ${source.chunkIndex + 1} of document "${source.docId}"`);
+          console.log(`   🏷️ Category: ${source.category} | Source: ${source.source}`);
+          if (source.metadata && Object.keys(source.metadata).length > 0) {
+            console.log('   📋 Metadata:', source.metadata);
+          }
+          console.log('');
+        });
+        console.groupEnd();
+        
         console.groupEnd();
       }
       
