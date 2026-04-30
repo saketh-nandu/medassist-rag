@@ -143,6 +143,7 @@ function MessageBubble({ message, onViewBody }: { message: ChatMessage & { confi
   const isEmergency = message.isEmergency;
   const confidence  = message.confidence;
   const ragData     = message.ragMetadata;
+  const [showRAGDetails, setShowRAGDetails] = useState(false);
 
   function renderText(text: string) {
     return text.split(/(\*\*.*?\*\*)/g).map((p, i) =>
@@ -177,26 +178,105 @@ function MessageBubble({ message, onViewBody }: { message: ChatMessage & { confi
           <Text style={[mb.aiText, isEmergency && { color: '#7F1D1D' }]}>{renderText(message.content)}</Text>
           {confidence !== undefined && <ConfidenceMeter score={confidence} />}
           
-          {/* RAG Sources Display with Dataset Paths */}
+          {/* Enhanced RAG Sources Display with Detailed Scores */}
           {ragData && ragData.topSources && ragData.topSources.length > 0 && (
             <View style={mb.ragSources}>
-              <Text style={mb.ragSourcesTitle}>📚 Medical Sources ({ragData.pipelineStats.finalResults} selected)</Text>
-              {ragData.topSources.slice(0, 3).map((source: any, i: number) => (
-                <View key={i} style={mb.sourceItem}>
-                  <Text style={mb.sourceTitle}>{source.title?.slice(0, 40)}...</Text>
-                  <Text style={mb.sourceDetails}>
-                    📁 {source.datasetPath}
-                  </Text>
-                  <Text style={mb.sourceScores}>
-                    📈 {source.vectorScore ? `${source.vectorScore}% match` : 'Keyword match'} | 
-                    {source.chunkIndex !== undefined ? ` Chunk ${source.chunkIndex + 1}` : ''}
-                  </Text>
+              <View style={mb.ragHeader}>
+                <Text style={mb.ragSourcesTitle}>📚 Medical Sources ({ragData.pipelineStats.finalResults} selected)</Text>
+                <TouchableOpacity 
+                  style={mb.ragToggle} 
+                  onPress={() => setShowRAGDetails(!showRAGDetails)}
+                >
+                  <Text style={mb.ragToggleText}>{showRAGDetails ? 'Hide' : 'Show'} Scores</Text>
+                </TouchableOpacity>
+              </View>
+              
+              {showRAGDetails && (
+                <>
+                  {/* Pipeline Statistics */}
+                  <View style={mb.pipelineStats}>
+                    <Text style={mb.pipelineStatsTitle}>🔍 RAG Pipeline Results:</Text>
+                    <Text style={mb.pipelineStatsText}>
+                      Vector: {ragData.pipelineStats.vectorResults} • Keyword: {ragData.pipelineStats.keywordResults} • 
+                      Fused: {ragData.pipelineStats.fusedResults} • Final: {ragData.pipelineStats.finalResults}
+                    </Text>
+                  </View>
+
+                  {/* Detailed Source Information with Scores */}
+                  {ragData.topSources.slice(0, 3).map((source: any, i: number) => (
+                    <View key={i} style={mb.sourceItemEnhanced}>
+                      <View style={mb.sourceHeader}>
+                        <Text style={mb.sourceRank}>#{i + 1}</Text>
+                        <Text style={mb.sourceTitle}>{source.title?.slice(0, 35)}...</Text>
+                      </View>
+                      
+                      <Text style={mb.sourceDetails}>📁 {source.datasetPath}</Text>
+                      
+                      {/* Score Bars */}
+                      <View style={mb.scoreSection}>
+                        {source.vectorScore && (
+                          <View style={mb.scoreRow}>
+                            <Text style={mb.scoreLabel}>Vector:</Text>
+                            <View style={mb.scoreBarContainer}>
+                              <View style={[mb.scoreBar, { width: `${Math.min(parseFloat(source.vectorScore), 100)}%`, backgroundColor: '#10B981' }]} />
+                            </View>
+                            <Text style={mb.scoreValue}>{source.vectorScore}%</Text>
+                          </View>
+                        )}
+                        
+                        {source.rrfScore && (
+                          <View style={mb.scoreRow}>
+                            <Text style={mb.scoreLabel}>RRF:</Text>
+                            <View style={mb.scoreBarContainer}>
+                              <View style={[mb.scoreBar, { width: `${Math.min(parseFloat(source.rrfScore) * 5000, 100)}%`, backgroundColor: '#3B82F6' }]} />
+                            </View>
+                            <Text style={mb.scoreValue}>{source.rrfScore}</Text>
+                          </View>
+                        )}
+                        
+                        {source.rerankScore && (
+                          <View style={mb.scoreRow}>
+                            <Text style={mb.scoreLabel}>Rerank:</Text>
+                            <View style={mb.scoreBarContainer}>
+                              <View style={[mb.scoreBar, { width: `${Math.min(parseFloat(source.rerankScore), 100)}%`, backgroundColor: '#F59E0B' }]} />
+                            </View>
+                            <Text style={mb.scoreValue}>{source.rerankScore}%</Text>
+                          </View>
+                        )}
+                      </View>
+                      
+                      <Text style={mb.sourceChunkInfo}>
+                        📑 Chunk {source.chunkIndex + 1} • {source.category} • {source.source}
+                      </Text>
+                    </View>
+                  ))}
+                  
+                  {/* Generation Statistics */}
+                  {ragData.generationStats && (
+                    <View style={mb.generationStats}>
+                      <Text style={mb.generationStatsTitle}>🤖 AI Generation:</Text>
+                      <Text style={mb.generationStatsText}>
+                        {ragData.generationStats.model} • {ragData.generationStats.responseTime}ms • ~{ragData.generationStats.tokensUsed} tokens
+                      </Text>
+                      {ragData.queryExpansion && (
+                        <Text style={mb.queryExpansion}>
+                          🔍 Query expanded with medical terms
+                        </Text>
+                      )}
+                    </View>
+                  )}
+                </>
+              )}
+              
+              {/* Always show basic source info */}
+              {!showRAGDetails && (
+                <View style={mb.basicSources}>
+                  {ragData.topSources.slice(0, 2).map((source: any, i: number) => (
+                    <Text key={i} style={mb.basicSourceText}>
+                      • {source.title?.slice(0, 30)}... ({source.vectorScore || 'N/A'}% match)
+                    </Text>
+                  ))}
                 </View>
-              ))}
-              {ragData.generationStats && (
-                <Text style={mb.ragStats}>
-                  🤖 {ragData.generationStats.model} • {ragData.generationStats.responseTime}ms • ~{ragData.generationStats.tokensUsed} tokens
-                </Text>
               )}
             </View>
           )}
@@ -250,12 +330,42 @@ const mb = StyleSheet.create({
   
   // RAG Sources Styles
   ragSources:      { marginTop: spacing.md, paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.borderLight },
-  ragSourcesTitle: { fontSize: 11, fontWeight: '700', color: colors.textSecondary, marginBottom: spacing.sm },
-  sourceItem:      { marginBottom: spacing.sm, paddingLeft: spacing.sm },
-  sourceTitle:     { fontSize: 12, fontWeight: '600', color: colors.text },
-  sourceDetails:   { fontSize: 10, color: colors.textSecondary, marginTop: 2 },
-  sourceScores:    { fontSize: 10, color: colors.textTertiary, marginTop: 1, fontStyle: 'italic' },
-  ragStats:        { fontSize: 10, color: colors.textTertiary, marginTop: spacing.sm, fontStyle: 'italic' },
+  ragHeader:       { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
+  ragSourcesTitle: { fontSize: 11, fontWeight: '700', color: colors.textSecondary },
+  ragToggle:       { paddingHorizontal: spacing.sm, paddingVertical: 4, backgroundColor: colors.primaryLight, borderRadius: radius.sm },
+  ragToggleText:   { fontSize: 10, fontWeight: '600', color: colors.primary },
+  
+  // Basic Sources (when collapsed)
+  basicSources:    { paddingLeft: spacing.sm },
+  basicSourceText: { fontSize: 10, color: colors.textSecondary, marginBottom: 2 },
+  
+  // Pipeline Statistics
+  pipelineStats:      { backgroundColor: '#F8FAFC', padding: spacing.sm, borderRadius: radius.md, marginBottom: spacing.sm },
+  pipelineStatsTitle: { fontSize: 10, fontWeight: '700', color: colors.textSecondary, marginBottom: 2 },
+  pipelineStatsText:  { fontSize: 9, color: colors.textTertiary },
+  
+  // Enhanced Source Items
+  sourceItemEnhanced: { marginBottom: spacing.md, padding: spacing.sm, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.borderLight },
+  sourceHeader:       { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.xs },
+  sourceRank:         { width: 20, height: 20, borderRadius: 10, backgroundColor: colors.primary, color: '#fff', fontSize: 10, fontWeight: '700', textAlign: 'center', lineHeight: 20 },
+  sourceTitle:        { flex: 1, fontSize: 12, fontWeight: '600', color: colors.text },
+  sourceDetails:      { fontSize: 10, color: colors.textSecondary, marginBottom: spacing.sm },
+  
+  // Score Visualization
+  scoreSection:       { marginBottom: spacing.sm },
+  scoreRow:           { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: 4 },
+  scoreLabel:         { width: 50, fontSize: 9, fontWeight: '600', color: colors.textSecondary },
+  scoreBarContainer:  { flex: 1, height: 8, backgroundColor: colors.borderLight, borderRadius: 4, overflow: 'hidden' },
+  scoreBar:           { height: '100%', borderRadius: 4 },
+  scoreValue:         { width: 45, fontSize: 9, fontWeight: '600', color: colors.text, textAlign: 'right' },
+  
+  sourceChunkInfo:    { fontSize: 9, color: colors.textTertiary, fontStyle: 'italic' },
+  
+  // Generation Statistics
+  generationStats:      { backgroundColor: '#F0F9FF', padding: spacing.sm, borderRadius: radius.md, marginTop: spacing.sm },
+  generationStatsTitle: { fontSize: 10, fontWeight: '700', color: colors.textSecondary, marginBottom: 2 },
+  generationStatsText:  { fontSize: 9, color: colors.textTertiary },
+  queryExpansion:       { fontSize: 9, color: colors.textTertiary, marginTop: 2, fontStyle: 'italic' },
   
   tagsRow:   { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.sm },
   tag:       { backgroundColor: '#F0FDFA', paddingHorizontal: spacing.sm, paddingVertical: 3, borderRadius: radius.full, borderWidth: 1, borderColor: '#99F6E4' },
