@@ -138,10 +138,11 @@ const dc = StyleSheet.create({
 });
 
 // ─── MESSAGE BUBBLE ──────────────────────────────────────────────────────────
-function MessageBubble({ message, onViewBody }: { message: ChatMessage & { confidence?: number; isEmergency?: boolean }; onViewBody?: (a: string[]) => void }) {
+function MessageBubble({ message, onViewBody }: { message: ChatMessage & { confidence?: number; isEmergency?: boolean; ragMetadata?: any }; onViewBody?: (a: string[]) => void }) {
   const isUser      = message.role === 'user';
   const isEmergency = message.isEmergency;
   const confidence  = message.confidence;
+  const ragData     = message.ragMetadata;
 
   function renderText(text: string) {
     return text.split(/(\*\*.*?\*\*)/g).map((p, i) =>
@@ -175,6 +176,26 @@ function MessageBubble({ message, onViewBody }: { message: ChatMessage & { confi
           )}
           <Text style={[mb.aiText, isEmergency && { color: '#7F1D1D' }]}>{renderText(message.content)}</Text>
           {confidence !== undefined && <ConfidenceMeter score={confidence} />}
+          
+          {/* RAG Sources Display */}
+          {ragData && ragData.topSources && ragData.topSources.length > 0 && (
+            <View style={mb.ragSources}>
+              <Text style={mb.ragSourcesTitle}>📚 Medical Sources ({ragData.pipelineStats.finalResults} selected)</Text>
+              {ragData.topSources.slice(0, 3).map((source: any, i: number) => (
+                <View key={i} style={mb.sourceItem}>
+                  <Text style={mb.sourceTitle}>{source.title?.slice(0, 40)}...</Text>
+                  <Text style={mb.sourceDetails}>
+                    {source.source} • {source.vectorScore ? `${source.vectorScore}% match` : 'Keyword match'}
+                  </Text>
+                </View>
+              ))}
+              {ragData.generationStats && (
+                <Text style={mb.ragStats}>
+                  🤖 {ragData.generationStats.model} • {ragData.generationStats.responseTime}ms • ~{ragData.generationStats.tokensUsed} tokens
+                </Text>
+              )}
+            </View>
+          )}
         </View>
 
         {message.conditions && message.conditions.length > 0 && (
@@ -222,6 +243,15 @@ const mb = StyleSheet.create({
   emergencyHeader: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: spacing.sm, paddingBottom: spacing.sm, borderBottomWidth: 1, borderBottomColor: '#FCA5A5' },
   emergencyLabel:  { fontSize: 10, fontWeight: '800', color: '#991B1B', letterSpacing: 0.5 },
   aiText:    { fontSize: 14, color: colors.text, lineHeight: 21 },
+  
+  // RAG Sources Styles
+  ragSources:      { marginTop: spacing.md, paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.borderLight },
+  ragSourcesTitle: { fontSize: 11, fontWeight: '700', color: colors.textSecondary, marginBottom: spacing.sm },
+  sourceItem:      { marginBottom: spacing.sm, paddingLeft: spacing.sm },
+  sourceTitle:     { fontSize: 12, fontWeight: '600', color: colors.text },
+  sourceDetails:   { fontSize: 10, color: colors.textSecondary, marginTop: 2 },
+  ragStats:        { fontSize: 10, color: colors.textTertiary, marginTop: spacing.sm, fontStyle: 'italic' },
+  
   tagsRow:   { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.sm },
   tag:       { backgroundColor: '#F0FDFA', paddingHorizontal: spacing.sm, paddingVertical: 3, borderRadius: radius.full, borderWidth: 1, borderColor: '#99F6E4' },
   tagText:   { fontSize: 11, color: colors.primary, fontWeight: '600' },
@@ -280,12 +310,24 @@ export default function ChatScreen() {
         content: m.content.slice(0, 300),
       }));
       const response = await getAIResponse(trimmed, history);
+      
+      // Log RAG details to browser console
+      if (response.ragMetadata) {
+        console.group('🧠 RAG Pipeline Results');
+        console.log('📊 Pipeline Stats:', response.ragMetadata.pipelineStats);
+        console.log('🔍 Query Expansion:', response.ragMetadata.queryExpansion || 'None');
+        console.log('🤖 Generation Stats:', response.ragMetadata.generationStats);
+        console.table(response.ragMetadata.topSources);
+        console.groupEnd();
+      }
+      
       const aiMsg = Object.assign(
         { id: (Date.now() + 1).toString(), role: 'assistant' as const, content: response.content, timestamp: new Date(),
           severity: response.severity, conditions: response.conditions,
           suggestedActions: response.suggestedActions, affectedAreas: response.affectedAreas },
         { confidence: response.severity === 'high' ? 0.95 : response.severity === 'medium' ? 0.75 : 0.65,
-          isEmergency: response.isEmergency }
+          isEmergency: response.isEmergency,
+          ragMetadata: response.ragMetadata }
       );
       addMessage(aiMsg as ChatMessage);
       if (response.affectedAreas.length > 0) setHighlightedAreas(response.affectedAreas);
